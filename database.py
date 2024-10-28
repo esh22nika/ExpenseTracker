@@ -1,5 +1,5 @@
 import sqlite3
-
+from datetime import datetime, timedelta
 class Database:
     def __init__(self, db_file):
         self.conn = sqlite3.connect(db_file)
@@ -52,3 +52,60 @@ class Database:
     def delete_expense(self, expense_id):
         self.cursor.execute("DELETE FROM expenses WHERE expense_id = ?", (expense_id,))
         self.conn.commit()
+    def create_tables(self):
+        # Table for user goals
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS goals (
+                user_id INTEGER PRIMARY KEY,
+                weekly_goal REAL,
+                monthly_goal REAL
+            )
+        ''')
+        
+        # Table for expenses (assuming it doesn't already exist)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER,
+                expense_category TEXT,
+                amount REAL,
+                date TEXT
+            )
+        ''')
+        
+        self.conn.commit()
+    def set_goals(self, user_id, weekly_goal, monthly_goal):
+        # Insert or update goals for the user
+        self.cursor.execute('''
+            INSERT INTO goals (user_id, weekly_goal, monthly_goal) 
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET weekly_goal = ?, monthly_goal = ?
+        ''', (user_id, weekly_goal, monthly_goal, weekly_goal, monthly_goal))
+        
+        self.conn.commit()
+
+    def get_goals(self, user_id):
+        # Fetch goals for the user
+        self.cursor.execute('SELECT weekly_goal, monthly_goal FROM goals WHERE user_id = ?', (user_id,))
+        result = self.cursor.fetchone()
+        return result if result else (None, None)
+
+    def get_weekly_expenses(self, user_id):
+        # Calculate expenses from the past 7 days
+        one_week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        self.cursor.execute('''
+            SELECT SUM(amount) FROM expenses 
+            WHERE user_id = ? AND expense_date >= ?
+        ''', (user_id, one_week_ago))
+        result = self.cursor.fetchone()
+        return result[0] if result[0] else 0.0
+
+    def get_monthly_expenses(self, user_id):
+        # Calculate expenses from the past 30 days
+        one_month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        self.cursor.execute('''
+            SELECT SUM(amount) FROM expenses 
+            WHERE user_id = ? AND expense_date >= ?
+        ''', (user_id, one_month_ago))
+        result = self.cursor.fetchone()
+        return result[0] if result[0] else 0.0
